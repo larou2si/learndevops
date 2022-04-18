@@ -1,4 +1,5 @@
 CODE_CHANGES = getGitChanges() // !!!
+def gv
 
 /*
 what variables are available from jenkins?
@@ -6,10 +7,33 @@ see at: <jenkins_url>/env-vars.html
 */
 pipeline {
     agent none
+
+    // declarative
     environment {
         NEW_VERSION = '1.3.0'
+        /* acces to the credentials by declaring envirment variable ! or we
+        SERVER_CRESENTIALS = credentials('server-crendentials')
+        */
     }
+    tools{ // preinstalled build tools in jenkins like maven, gradle...!
+        maven 'Maven' // the name declared in jenkins config
+        gradle
+    }
+    parameters{
+        // string(name: 'VERSION', defaultValue: '', description: 'version to deploy')
+        choice(name:'VERSION', choices:['1.1.0','1.2.0','1.3.0'], description: '....')
+        booleanParam(name:'executeTests', defaultValue: true, description: '....')
+    }
+    // end declative
+
     stages {
+        stage("init"){ // here in this stage, we load externel's file script
+            steps{
+                script{
+                    gv = load "demoscript.groovy"
+                }
+            }
+        }
         stage("build") {
             when {
                 expression {
@@ -20,46 +44,46 @@ pipeline {
             steps {
                 echo 'building the application... when the expression is validated!'
                 echo "display an environment variable ${NEW_VERSION}"
+                withCredentials([
+                    usernamePassword(credentialsID: 'docker-hub-repo', 
+                        usernameVariable:USER, passwordVariable:PWD)
+                ]){
+                    sh "i can use the variable declare in usernameVariable ${USER} ${PWD}"
+                    sh 'docker build -t my-project-repo/demo-app:1.2 .'
+                    sh "echo $PASS | docker login -u $USER --password-stdin <remote-repo>"
+                    sh 'docker push my-project-repo/demo-app:1.2'
+                }
+
             }
         }
-        stage('Select micro services') {
-            input {
-                message "Select all micro services to deploy"
-                ok "All selected!"
-                parameters {
-                    choice(name: 'MS1', choices: ['1.1.0', '1.2.0', '1.3.0'], description: 'input ms')
-                    choice(name: 'MS2', choices: ['1.1.0', '1.2.0', '1.3.0'], description: 'input ms')
-                    choice(name: 'MS3', choices: ['1.1.0', '1.2.0', '1.3.0'], description: 'input ms')
-                    choice(name: 'MS4', choices: ['1.1.0', '1.2.0', '1.3.0'], description: 'input ms')
+        stage("test"){
+            /*input{ // ALLOW USER PARAMETERS 
+                message "select envirement to deploy to"
+                ok "Done"
+                parameters{
+                    choice(name:'ONE', choices:['dev','staging','prod'], description: '..')
+                    choice(name:'TWO', choices:['dev','staging','prod'], description: '..')
+
+                }
+            }*/
+            when{
+                expression{
+                    params.executeTests
                 }
             }
-            steps {
-                script {
-                    echo "Hello, ${MS1}. Hello, ${MS2}. Hello, ${MS3}. Hello, ${MS4}"
-                    MS1_TO_DEPLOY = MS1
-                    MS2_TO_DEPLOY = MS2
-                    env.MS3_TO_DEPLOY = MS3
-                    env.MS4_TO_DEPLOY = MS4
-                }
-            }
-        }
-        stage('Select single service') {
-            input {
-                message "Select single micro services to deploy?"
-                parameters {
-                    choice(name: 'MS5', choices: ['1.1.0', '1.2.0', '1.3.0'], description: 'second param with single option')
-                }
-            }
-            steps {
-                script {
-                    echo "Hello, ${MS5}."
-                    env.MS5_TO_DEPLOY = MS5
-                    echo "${MS1_TO_DEPLOY}"
-                    echo "${MS4_TO_DEPLOY}"
-                    echo "${MS5_TO_DEPLOY}"
+            steps{
+                //echo "testing ${params.VERSION}"
+                script{
+                    // ALLOW USER PARAMETERS
+                    env.ENV = input message: "select envirement to deploy to", ok: "Done", parameters: [choice(name:'ONE', choices:['dev','staging','prod'], description: '..')]
+
+                    gv.testApp()
                 }
             }
         }
+
+
+        
     }
     post {
         always {
