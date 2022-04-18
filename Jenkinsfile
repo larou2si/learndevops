@@ -114,7 +114,32 @@ pipeline {
                 }
             }
         }
-
+        stage ('commit version update the repo'){
+            steps{
+                script{
+                    withCredentials([
+                    usernamePassword(credentialsID: 'gitlab-auth', 
+                        usernameVariable:USER, passwordVariable:PWD)
+                ]){
+                    // set config
+                    sh 'git config --global user.email "expl@expl.com"'
+                    sh 'git config --global user.name "expl"'
+                    /*
+                    // to have information
+                    sh 'git status'
+                    sh 'git branch' // jenkins fetch the last commit from git, thats why we have to push with a specific branch name!
+                    sh 'git config --list'
+                    */
+                    sh "git remote set-url origin https://${USER}:${PASS}@gitlab.com/nanuchi/java-maven-app.git"
+                    sh "git add ."
+                    sh "git commit -m 'ci: version bump'"
+                    sh 'git push origin HEAD:jenkins-jobs'
+                    // don't forget to set webhook for this changes to be triggered auto
+                    // add 'ignore commiter strategy' plugin in jenkins. add the email in build config to ignore this branch
+                }
+                }
+            }
+        }
 
         
     }
