@@ -46,7 +46,28 @@ pipeline {
                 }
             }
         }
-        stage("build") {
+        stage ('increment version'){
+            steps {
+                script {
+                    eho 'incrementing app version...'
+                    sh "mvn build-helper:parse-version versions:set \
+                        -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
+                        versions:commit"
+                // retrieve version values to match them with DockerImage
+                    def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
+                    env.IMAGE_NAME = "$matcher[0][1]-$BUILD_NUMBER" 
+                }
+            }
+        }
+        stage ('build app') {
+            steps {
+                script{
+                    echo "building our app....."
+                    sh "mvn clean package"
+                }
+            }
+        }
+        stage("build image") {
             when {
                 expression {
                     BRANCH_NAME == 'dev' && CODE_CHANGES == true
@@ -61,9 +82,9 @@ pipeline {
                         usernameVariable:USER, passwordVariable:PWD)
                 ]){
                     sh "i can use the variable declare in usernameVariable ${USER} ${PWD}"
-                    sh 'docker build -t my-project-repo/demo-app:1.2 .'
+                    sh "docker build -t my-project-repo/demo-app:$env.IMAGE_NAME ."
                     sh "echo $PASS | docker login -u $USER --password-stdin <remote-repo>"
-                    sh 'docker push my-project-repo/demo-app:1.2'
+                    sh "docker push my-project-repo/demo-app:$env.IMAGE_NAME"
                 }
 
             }
